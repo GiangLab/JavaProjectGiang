@@ -2,8 +2,6 @@ package com.example.GiangFroject.Service;
 
 import com.example.GiangFroject.models.Task;
 import com.example.GiangFroject.Repository.TaskRepository;
-import com.example.GiangFroject.kafka.TaskProducer; // Đảm bảo bạn đã import đúng
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
@@ -23,9 +21,9 @@ public class TaskService {
     }
 
     @Autowired
-    private TaskProducer taskProducer;
+    private NotificationService notificationService; // 👈 gọi async từ service khác
 
-    @CacheEvict(value = "tasks", key = "#task.userId") // Xóa cache khi tạo task mới
+    @CacheEvict(value = "tasks", key = "#task.userId")
     public Task createTask(Task task) {
         if (task.getUserId() == null || task.getTitle() == null || task.getTargetDate() == null) {
             throw new IllegalArgumentException("userId, title, and targetDate are required");
@@ -35,13 +33,13 @@ public class TaskService {
         task.setDeleted(false);
         Task savedTask = taskRepository.save(task);
 
-        // Gửi thông báo qua Kafka
-        taskProducer.sendTaskNotification("New Task for user " + task.getUserId() + ": " + task.getTitle());
+        // Gửi thông báo bất đồng bộ
+        notificationService.sendAsyncNotification("New Task for user " + task.getUserId() + ": " + task.getTitle());
 
         return savedTask;
     }
 
-    @Cacheable(value = "tasks", key = "#userId") // Lưu kết quả getAllTasks vào cache
+    @Cacheable(value = "tasks", key = "#userId")
     public List<Task> getAllTasks(Long userId) {
         return taskRepository.findByUserIdAndDeletedFalse(userId);
     }
