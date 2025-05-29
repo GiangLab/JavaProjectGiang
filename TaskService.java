@@ -2,6 +2,8 @@ package com.example.GiangFroject.Service;
 
 import com.example.GiangFroject.models.Task;
 import com.example.GiangFroject.Repository.TaskRepository;
+import com.example.GiangFroject.kafka.TaskProducer; // Đảm bảo bạn đã import đúng
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
@@ -20,6 +22,9 @@ public class TaskService {
         this.taskRepository = taskRepository;
     }
 
+    @Autowired
+    private TaskProducer taskProducer;
+
     @CacheEvict(value = "tasks", key = "#task.userId") // Xóa cache khi tạo task mới
     public Task createTask(Task task) {
         if (task.getUserId() == null || task.getTitle() == null || task.getTargetDate() == null) {
@@ -28,7 +33,12 @@ public class TaskService {
         task.setCreationDate(LocalDateTime.now());
         task.setCompleted(false);
         task.setDeleted(false);
-        return taskRepository.save(task);
+        Task savedTask = taskRepository.save(task);
+
+        // Gửi thông báo qua Kafka
+        taskProducer.sendTaskNotification("New Task for user " + task.getUserId() + ": " + task.getTitle());
+
+        return savedTask;
     }
 
     @Cacheable(value = "tasks", key = "#userId") // Lưu kết quả getAllTasks vào cache
